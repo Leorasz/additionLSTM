@@ -1,0 +1,89 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import random
+import matplotlib.pyplot as plt
+
+
+class LSTM(nn.Module):
+
+    def __init__(self, input_size, hidden_size, output_size):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+        self.linny = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        lout,_ = self.lstm(x)
+        out = self.linny(lout[-1])
+        return out
+    
+def dataMaker(output_size):
+    ac = []
+    bc = []
+    a = random.randint(0,(10**output_size)-1)
+    b = random.randint(0,(10**output_size)-1)
+    [ac.append(int(i)) for i in str(a)]
+    [bc.append(int(i)) for i in str(b)]
+    return ac,bc,a+b
+#training
+epochs = 1000
+input_size = 1
+output_size = 4
+hidden_size = 64
+batch_size = 50
+
+model = LSTM(input_size, hidden_size, output_size)
+
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters())
+
+losses = []
+for epoch in range(epochs):
+    ac,bc,s = dataMaker(output_size)
+    cc = []
+    [cc.append(int(i)) for i in str(s)]
+    container = [ac,bc]
+    for c in [*container,cc]:
+        while len(c) < output_size:
+            c.insert(0,0)
+    #print(f"Putting in {int(''.join(str(digit) for digit in ac))} and {int(''.join(str(digit) for digit in bc))}, expecting {int(''.join(str(digit) for digit in cc))}")
+    output = model(torch.tensor(container, dtype=torch.float32).view(2,output_size,1))
+    loss = criterion(output, torch.tensor(cc[len(cc)-output_size:], dtype=torch.float32).view(output_size,1))
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    print(f"Epoch number [{epoch+1}/{epochs}], loss of {loss}")
+    losses.append(loss.item())
+
+plt.plot(losses)
+plt.show()
+plt.clf()
+
+#testing
+testing_epochs = 100
+corrects = 0
+ccorrects = 0
+
+model.eval()
+with torch.no_grad():
+    for _ in range(testing_epochs):
+        ac,bc,s = dataMaker(output_size)
+        for c in [ac,bc]:
+            while len(c) < output_size:
+                c.insert(0,0)
+        output = model(torch.tensor([ac,bc],dtype=torch.float32).view(2,output_size,1))
+        joutput = int(''.join(str(int(digit.item())) for digit in output))
+        print(f"It guess {joutput} when the answer was {s}")
+        d = abs(s-joutput)
+        if d < 10:
+            ccorrects+=1
+        if d == 0:
+            corrects = 0
+
+print(f"It was completely correct {100*corrects/testing_epochs}% of the time, and it was almost correct {100*ccorrects/testing_epochs}% of the time")
+
+
+
+
